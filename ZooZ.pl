@@ -4,8 +4,6 @@ use strict;
 use Data::Dumper qw/Dumper/;
 use Getopt::Long;
 
-use lib '/home/aqumsieh/Tk804.025_beta15/lib/site_perl/5.8.3/i686-linux';
-use lib '/home/aqumsieh/Perl/myLib';
 use Tk 804.025;
 use Tk qw/:colors/;
 use Tk::NoteBook;
@@ -19,9 +17,10 @@ use Tk::Labelframe;
 use Tk::DialogBox;
 use Tk::PNG;
 
-use constant DEBUG            => 0;
-use constant NOTEBOOK_SUPPORT => 0;
-use constant DUMP_PM_SUPPORT  => 1;
+use constant DEBUG                => 0;
+use constant NOTEBOOK_SUPPORT     => 0;
+use constant DUMP_PM_SUPPORT      => 1;
+use constant MENU_BUILDER_SUPPORT => 0;
 
 use ZooZ::Forms;
 use ZooZ::Project;
@@ -134,17 +133,18 @@ our %availableWidgets = (
 			 butLab   => [qw/Label Image Button Radiobutton Checkbutton/],
 			 text     => [qw/Entry Text ROText/],
 			 menuList => [qw/Listbox Optionmenu/],
-			 datadisp => [qw/Canvas Scale ProgressBar HList NoteBook/],
+			 datadisp => [qw/Canvas Scale ProgressBar HList/],
 #			 dialog   => [qw/Dialogbox Toplevel/],
 			 misc     => [qw/Labelframe Frame/],
 			 parasite => [qw/Scrollbar/],
 			);
 
+push @{$availableWidgets{datadisp}} => 'NoteBook' if NOTEBOOK_SUPPORT;
 
 #
 # Inits
 #
-$VERSION      = '1.0-RC3';
+$VERSION      = '1.0-RC4';
 $PROJID       = 0;
 $NO_SPLASH    = DEBUG? 1 : 0;
 $WARNINGS_ON  = 1;
@@ -199,6 +199,8 @@ ZooZ::Generic::popMessage(-over => $MW,
 			  -bg   => 'white',
 			  -font => 'Level',
 			 );
+
+$MW->optionAdd('*preview*BorderWidth' => 2);
 
 loadProject($_) for @ARGV;
 
@@ -297,7 +299,7 @@ sub createMenu {
   $MENU = $MW->Menu(-type => 'menubar', -bd => 1);
   $MW->configure(-menu => $MENU);
 
-  $MENU->optionAdd('*BorderWidth' => 1);
+  $MENU->optionAdd('*menu*BorderWidth' => 1);
 
   { # The File menu.
     my $f = $MENU->cascade(-label => '~File', -tearoff => 0);
@@ -325,6 +327,7 @@ sub createMenu {
 	$f->separator;
       }
     }
+
   }
 
   {
@@ -438,17 +441,19 @@ sub defineSettings {
 
 sub closeApp {
   # prompt.
-  my $ans = $MW->Dialog(-title   => 'Are you sure?',
-			-bitmap  => 'question',
-			-buttons => [qw/Yes No/],
-			-font    => 'Questions',
-			-text    => <<EOT)->Show;
+  unless (DEBUG) {
+    my $ans = $MW->Dialog(-title   => 'Are you sure?',
+			  -bitmap  => 'question',
+			  -buttons => [qw/Yes No/],
+			  -font    => 'Questions',
+			  -text    => <<EOT)->Show;
 If you quit, any unsaved projects
 will be lost! Are you sure you want
 to quit ZooZ?
 EOT
   ;
-  return if $ans eq 'No';
+    return if $ans eq 'No';
+  }
 
   # make sure all localReturns are set.
   ZooZ::Forms::cancelAllForms();
@@ -603,6 +608,14 @@ sub createToolBar {
 	      });
 
   $TB->separator;
+
+  if (DEBUG) {
+    $TB->Button(-text => 'test',
+		-command => sub {
+		  #$OPEN_PROJECTS[$CURID] && $PROJECTS[$CURID]->_test;
+		});
+    $TB->separator;
+  }
 
   # Now the project browseentry
   my $l = $TB->Label(-text   => 'Current Project:',
@@ -894,6 +907,7 @@ sub loadProject {
   open my $fh, $f or die $!;
 
   my @DATA;
+  my $PMW = {};
   my @ROWCOLDATA;
 
   local $_;
@@ -905,6 +919,20 @@ sub loadProject {
     # is it a project name
     if (/^\s*\[\s*Project\s+(.+?)\s*\]\s*$/) {
       $projName = $1;
+
+      # Is it the mainwindow?
+    } elsif (/^\s*\[MainWindow\]/) {
+      s/\#.*//;
+
+      while (<$fh>) {
+	last if /^\s*\[End\s+Widget\]/;
+
+	if (/^\s*Title\s+(.+)/) {
+	  $PMW->{title} = $1;
+	} elsif (/^WCONF\s+(\S+)\s+(.+)/) {
+	  $PMW->{$1} = $2;
+	}
+      }
 
       # Is it a widget?
     } elsif (/^\s*\[Widget\s+(\S+)\]/) {
@@ -1014,6 +1042,9 @@ sub loadProject {
 
   # Load any row/col conf (after widget creation)
   $proj->loadRowCol(@$_) for @ROWCOLDATA;
+
+  # configure the mainwindow.
+  $proj->setMW($PMW) if defined $PMW;
 
   $MW->Unbusy;
 
@@ -1340,9 +1371,9 @@ EOT
     }
 
     $WARN_DIALOG->Show();
-  };
+  } unless DEBUG;
 
-  $SIG{INT} = \&closeApp;
+  $SIG{INT} = \&closeApp unless DEBUG;
 }
 
 sub dumpPerlAs {
@@ -1607,7 +1638,7 @@ sub dumpPerlPM {
   my $h    = DEBUG ? "use lib '/home/aqumsieh/Tk804.025_beta15/lib/site_perl/5.8.3/i686-linux';\n" : '';
   my $pack = $NAMES[$CURID];
 
-  $pack =~ s/\s/_/g;
+  $pack =~ s/\W/_/g;
 
   print $fh <<EOT;
 
@@ -1634,7 +1665,7 @@ use base qw/Tk::Derived Tk::Frame/;
 
 Construct Tk::Widget '$pack';
 
-my \%ZWIDGETS;
+our \%ZWIDGETS;
 
 #
 # User-defined variables (if any)
@@ -1844,32 +1875,11 @@ Includes a simple IDE for defining variables and subroutines.
 
 =head1 STATUS AND LIMITATIONS
 
-Currently, ZooZ.pl is still in beta. So use at your own risk. At this stage, though,
-I consider it to be very usable. There are some major limitations though. Here is
-a list of the ones I consider major, and will probably fix before a 1.0 release. For
-a more comprehensive list of missing features, you can look into the Progress.txt
-file that comes in the root directory of the distribution.
-
-=over 4
-
-=item *
-
-The preview window displays all widgets with borderwidth of 1. The dumped Perl code
-has it set to 2.
-
-=item *
-
-No support, yet, for user-defined widgets.
-
-=item *
-
-No way to define bindings.
-
-=item *
-
-No way to set MainWindow properties.
-
-=back
+ZooZ is an on-going effort, and will probably stay so for a long time. At this stage,
+though, I consider it to be very usable. There are some major limitations though.
+For a comprehensive list of missing features, you can look at the Progress.txt
+file that comes in the root directory of the distribution. If you think there is
+something else that should be included in that file, then drop me a note.
 
 =head1 REQUIREMENTS
 

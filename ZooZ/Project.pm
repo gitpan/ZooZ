@@ -78,6 +78,13 @@ sub new {
     $obj->_createHierList;
     $obj->_createPreviewWindow;
     $obj->_unhideCanvas;
+    $obj->{MWPROPS} = {
+		       NAME    => 'MainWindow',
+		       PREVIEW => $obj->{PREVIEW},
+		       WCONF   => {},
+		       PCONF   => {},
+		       ECONF   => {},
+		      };
   }
 
   $obj->{SHARED}{IDS}                ||= {};         # widget ids to use when creating unique names.
@@ -100,60 +107,74 @@ sub _createHierList {
 
   # bind tree such that when we click on a widget, it is selected.
   my $tree = $self->{TOP}->Scrolled(Tree =>
-				       -scrollbars  => 'se',
-				       -borderwidth => 1,
-				       -browsecmd   => sub {
-					 return unless @_ == 1;
+				    -scrollbars  => 'se',
+				    -borderwidth => 1,
+				    -browsecmd   => sub {
+				      return unless @_ == 1;
 
-					 my $labS = shift;
-					 my $self = $self->{SHARED}{CUROBJ};
+				      my $labS = shift;
+				      my $self = $self->{SHARED}{CUROBJ};
 
-					 $labS =~ s/(.*)\.// or do { # mainwindow
-					   $self->{SHARED}{CUROBJ}->unselectCurrentWidget;
+				      $labS =~ s/(.*)\.// or do { # mainwindow
+					$self->{SHARED}{CUROBJ}->unselectCurrentWidget;
 
-					   # show the proper canvas.
-					   unless ($self->{SHARED}{CUROBJ} == $self->{SHARED}{SUBHIERS}{MainWindow}) {
-					     $self = $self->{SHARED}{SUBHIERS}{MainWindow}->_unhideCanvas;
-					   }
-					   return;
-					 };
+					# show the proper canvas.
+					unless ($self->{SHARED}{CUROBJ} == $self->{SHARED}{SUBHIERS}{MainWindow}) {
+					  $self = $self->{SHARED}{SUBHIERS}{MainWindow}->_unhideCanvas;
+					}
 
-					 # find out in which hierarchy this widget lies
-					 my $hier = $1;
-					 $hier =~ s/.*\.//;
+					$self->selectWidget('MainWindow');
+					return;
+				      };
 
-					 # show the proper canvas.
-					 unless ($self->{SHARED}{CUROBJ} == $self->{SHARED}{SUBHIERS}{$hier}) {
-					   $self = $self->{SHARED}{SUBHIERS}{$hier}->_unhideCanvas;
-					 }
+				      # find out in which hierarchy this widget lies
+				      my $hier = $1;
+				      $hier =~ s/.*\.//;
 
-					 # $labS is just a string.
-					 # get the actual label widget.
-					 my ($r, $c) = @{$self->{LABEL2GRID}{$labS}};
-					 my $lab = $self->{GRID}[$r][$c]{LABEL};
+				      # show the proper canvas.
+				      unless ($self->{SHARED}{CUROBJ} == $self->{SHARED}{SUBHIERS}{$hier}) {
+					$self = $self->{SHARED}{SUBHIERS}{$hier}->_unhideCanvas;
+				      }
 
-					 $self->selectWidget($lab);
-					 $self->descendHier if exists $self->{SHARED}{SUBHIERS}{$lab};
-				       },
-				       -command => sub {
-					 my $labS = shift;
+				      # $labS is just a string.
+				      # get the actual label widget.
+				      my ($r, $c) = @{$self->{LABEL2GRID}{$labS}};
+				      my $lab = $self->{GRID}[$r][$c]{LABEL};
 
-					 $labS =~ s/(.*)\.// or return; # MainWindow
+				      $self->selectWidget($lab);
+				      $self->descendHier if exists $self->{SHARED}{SUBHIERS}{$lab};
+				    },
+				    -command => sub {
+				      my $labS = shift;
 
-					 my $self = $self->{SHARED}{CUROBJ};
+				      #$labS =~ s/(.*)\.// or return; # MainWindow
 
-					 # get the actual label widget.
-					 my ($r, $c) = @{$self->{LABEL2GRID}{$labS}};
-					 my $lab = $self->{GRID}[$r][$c]{LABEL};
+				      $labS =~ s/(.*)\.// or do { # mainwindow
+					$self->{SHARED}{CUROBJ}->unselectCurrentWidget;
 
-					 # find out in which hierarchy this widget lies
-					 my $hier = $1;
-					 $hier =~ s/.*\.//;
-					 $self = $self->{SHARED}{SUBHIERS}{$hier};
+					# show the proper canvas.
+					unless ($self->{SHARED}{CUROBJ} == $self->{SHARED}{SUBHIERS}{MainWindow}) {
+					  $self = $self->{SHARED}{SUBHIERS}{MainWindow}->_unhideCanvas;
+					}
 
-					 $self->configureWidget($lab);
-				       },
-				      )->pack(qw/-side right -fill y/);
+					$self->configureWidget('MainWindow');
+					return;
+				      };
+
+				      my $self = $self->{SHARED}{CUROBJ};
+
+				      # get the actual label widget.
+				      my ($r, $c) = @{$self->{LABEL2GRID}{$labS}};
+				      my $lab = $self->{GRID}[$r][$c]{LABEL};
+
+				      # find out in which hierarchy this widget lies
+				      my $hier = $1;
+				      $hier =~ s/.*\.//;
+				      $self = $self->{SHARED}{SUBHIERS}{$hier};
+
+				      $self->configureWidget($lab);
+				    },
+				   )->pack(qw/-side right -fill y/);
 
   $self->{TOP}->Adjuster(-widget => $tree,
 			 -side   => 'right',
@@ -178,9 +199,11 @@ sub _createHierList {
 sub _createPreviewWindow {
   my $self = shift;
 
-  my $t = $self->{PARENT}->Toplevel;
+  my $t = $self->{PARENT}->Toplevel(Name => 'preview');
   $t->protocol(WM_DELETE_WINDOW => [$t => 'withdraw']);
   $t->title   ($self->{TITLE});
+
+  #$t->optionClear;
 
   $self->{PREVIEW} = $t;
 }
@@ -566,8 +589,12 @@ sub dropWidget {
   my ($id, $row, $col) = $self->_getGridClick;
 
   # didn't click on anything useful.
-  ZooZ::Generic::popMessage($::MW, 'Please click on a grid location.', 1500) &&
-      return undef unless defined $id;
+  ZooZ::Generic::popMessage(-over  => $::MW,
+			    -font  => 'Level',
+			    -bg    => 'White',
+			    -msg   => 'Please click on a grid location.',
+			    -delay => 1500) &&
+			      return undef unless defined $id;
 
   my $ref = $self->{GRID}[$row][$col];
 
@@ -585,8 +612,12 @@ sub dropWidget {
 
       # If scrollbar, then make object scrolled if it is scrollable.
       if ($::SELECTED_W =~ /scroll/i) {
-	ZooZ::Generic::popMessage($::MW, "Widget $ref->{WIDGET} is not scrollable!", 1500) &&
-	    return undef unless exists $scrollable{$ref->{WIDGET}};
+	ZooZ::Generic::popMessage(-over  => $::MW,
+				  -font  => 'Level',
+				  -bg    => 'White',
+				  -msg   => "Widget $ref->{WIDGET} is not scrollable!",
+				  -delay => 1500) &&
+				    return undef unless exists $scrollable{$ref->{WIDGET}};
 
 	$ref->{ECONF}{SCROLLON} = 1;
       }
@@ -594,8 +625,12 @@ sub dropWidget {
     } else {
       # not a parasite.
       # is it a container.
-      ZooZ::Generic::popMessage($::MW, 'Please click on an empty grid location.', 1500) &&
-	  return undef unless $ref->{WIDGET} =~ $isContainer;
+      ZooZ::Generic::popMessage(-over  => $::MW,
+				-font  => 'Level',
+				-bg    => 'White',
+				-msg   => 'Please click on an empty grid location.',
+				-delay => 1500) &&
+				  return undef unless $ref->{WIDGET} =~ $isContainer;
 
       $self->descendHier($ref->{LABEL});
       return undef;
@@ -605,7 +640,11 @@ sub dropWidget {
   } else {
     # empty.
     # Go on ONLY if added widget is NOT a parasite.
-    ZooZ::Generic::popMessage($::MW, <<EOT, 1500) && return undef if $::SELECTED_W =~ $isParasite;
+    ZooZ::Generic::popMessage(-over  => $::MW,
+			      -font  => 'Level',
+			      -bg    => 'White',
+			      -delay => 1500,
+			      -msg   => <<EOT) && return undef if $::SELECTED_W =~ $isParasite;
 A $::SELECTED_W widget can only be
 used in conjunction with a scrollable widget.
 EOT
@@ -891,22 +930,24 @@ sub selectWidget {
     return if $self->{SELECTED} == $lab;
 
     # manually unselect the older widget.
-    $self->{SELECTED}->configure(-bg => NORMAL_BG);
+    $self->{SELECTED}->configure(-bg => NORMAL_BG) if ref $self->{SELECTED};
     $self->{DESCEND} ->placeForget;
   }
 
 
-  $lab->configure(-bg => 'cornflowerblue');
+  $lab->configure(-bg => 'cornflowerblue') if ref $lab;
   $self->{SELECTED} = $lab;
-  $self->{MOVABLE}  = $lab;
+  $self->{MOVABLE}  = ref $lab ? $lab : '';
 
   # must show the resize buttons.
-  $self->_showResizeButtons;
+  $self->_showResizeButtons if ref $lab;
 
   # reflect this in the hier tree.
-  $self->{TREE}->selectionClear;
-  $self->{TREE}->selectionSet("$self->{HIERTOP}.$lab");
-  $self->{TREE}->anchorSet   ("$self->{HIERTOP}.$lab");
+  if (ref $lab) { # only if it's a widget. Else .. it's MainWindow
+    $self->{TREE}->selectionClear;
+    $self->{TREE}->selectionSet("$self->{HIERTOP}.$lab");
+    $self->{TREE}->anchorSet   ("$self->{HIERTOP}.$lab");
+  }
 
   # if the configure form is open, reflect there too.
   $self->configureWidget($lab, 1);
@@ -922,7 +963,8 @@ sub unselectCurrentWidget {
   my $self = shift;
 
   my $lab  = $self->{SELECTED};
-  $lab or return;
+  $lab     or return;
+  ref $lab or return;
 
   $lab->configure(-bg => NORMAL_BG);
   $self->{SELECTED} = '';
@@ -949,8 +991,8 @@ sub _getGridClick {
   my $self = shift;
   my $cv   = $self->{CV};
 
-  my $x  = $cv->pointerx - $cv->rootx;
-  my $y  = $cv->pointery - $cv->rooty;
+  my $x  = $cv->canvasx($cv->pointerx - $cv->rootx);
+  my $y  = $cv->canvasy($cv->pointery - $cv->rooty);
 
   for my $id ($cv->find(overlapping => $x, $y, $x, $y)) {
     my @t  = $cv->gettags($id);
@@ -958,10 +1000,23 @@ sub _getGridClick {
     my ($r, $c) = "@t" =~ /\bGRID_(\d+)_(\d+)\b/;
     defined $r or next;
 
-    return ($id, $r, $c);
+    return $self->_isGridVisible($id) ? ($id, $r, $c) : undef;
   }
 
   return undef;
+}
+
+sub _isGridVisible {
+  my ($self, $id) = @_;
+
+  my $c = $self->{CV};
+  my $x1 = $c->canvasx($c->x);
+  my $y1 = $c->canvasy($c->y);
+  my $x2 = $c->canvasx($c->x + $c->width);
+  my $y2 = $c->canvasy($c->y + $c->height);
+
+  return 1 if grep $_ == $id, $c->find(overlapping => $x1, $y1, $x2, $y2);
+  return 0;
 }
 
 ###############
@@ -1162,21 +1217,38 @@ sub _unhideCanvas {
 sub configureWidget {
   my ($self, $lab, $noforce) = @_;
 
-  my ($r, $c) = @{$self->{LABEL2GRID}{$lab}};
-  my $ref     = $self->{GRID}[$r][$c];
+  if (ref $lab) { # a widget
+    my ($r, $c) = @{$self->{LABEL2GRID}{$lab}};
+    my $ref     = $self->{GRID}[$r][$c];
 
-  ZooZ::Forms->configureWidget(
-			       $self,
-			       $self->{PARENT},
-			       $self->{PROJID},
-			       $ref ->{NAME},
-			       $ref ->{PREVIEW},
-			       $ref ->{WCONF},
-			       $ref ->{PCONF},
-			       $ref ->{ECONF},
-			       $noforce,
-			       exists $scrollable{$ref->{WIDGET}},
-			      );
+    ZooZ::Forms->configureWidget(
+				 $self,
+				 $self->{PARENT},
+				 $self->{PROJID},
+				 $ref ->{NAME},
+				 $ref ->{PREVIEW},
+				 $ref ->{WCONF},
+				 $ref ->{PCONF},
+				 $ref ->{ECONF},
+				 $noforce,
+				 exists $scrollable{$ref->{WIDGET}},
+				);
+  } else {
+    # MainWindow.
+    my $ref = $self->{MWPROPS};
+    ZooZ::Forms->configureWidget(
+				 $self,
+				 $self->{PARENT},
+				 $self->{PROJID},
+				 $ref ->{NAME},
+				 $ref ->{PREVIEW},
+				 $ref ->{WCONF},
+				 undef,
+				 undef,
+				 $noforce,
+				 0,
+				);
+  }
 }
 
 #################################
@@ -1359,14 +1431,28 @@ sub loadRowCol {
 sub save {
   my ($self, $fh, $parent) = @_;
 
+  # If it's the mainwindow, then save off the mw attributes.
+#  unless ($self->{ISCHILD}) {
+#    print $fh "[MainWindow]\n";
+#    print $fh "Title ", $self->{PREVIEW}->title, "\n";
+#  }
+
   $parent ||= 'MainWindow';
 
-  for my $lab (keys %{$self->{LABEL2GRID}}) {
-    my ($row, $col) = @{$self->{LABEL2GRID}{$lab}};
-    my $ref         = $self->{GRID}[$row][$col];
+  for my $lab (MainWindow => keys %{$self->{LABEL2GRID}}) {
+    my $ref;
 
-    # print the basic info.
-    print $fh <<EOT;
+    if ($lab eq 'MainWindow') {
+      $ref            = $self->{MWPROPS};
+      print $fh "[MainWindow]\n";
+      print $fh "Title ", $self->{PREVIEW}->title, "\n";
+
+    } else {
+      my ($row, $col) = @{$self->{LABEL2GRID}{$lab}};
+      $ref            = $self->{GRID}[$row][$col];
+
+      # print the basic info.
+      print $fh <<EOT;
 \[Widget $ref->{NAME}\]
 Parent   $parent
 Type     $ref->{WIDGET}
@@ -1376,9 +1462,12 @@ Rowspan  $ref->{ROWS}
 Colspan  $ref->{COLS}
 EOT
   ;
+    }
 
     # now the options.
     for my $h (qw/WCONF PCONF ECONF/) {
+      next unless defined $ref->{$h};
+
       for my $k (sort keys %{$ref->{$h}}) {
 	next if $h eq 'PCONF' && $k =~ /^[nsew]$/;
 
@@ -1416,7 +1505,7 @@ EOT
     print $fh "[End Widget]\n\n";
 
     # if a container, then call recursively.
-    if (exists $self->{SHARED}{SUBHIERS}{$lab}) {
+    if ($lab ne 'MainWindow' && exists $self->{SHARED}{SUBHIERS}{$lab}) {
       $self->{SHARED}{SUBHIERS}{$lab}->save($fh, $ref->{NAME});
     }
   }
@@ -1905,7 +1994,25 @@ sub renameWidget {
 sub renameProject {
   my ($self, $newName) = @_;
 
-  $_->{PROJNAME} = $newName for values %{$self->{SHARED}{SUBHIERS}};
+  $_->{PROJNAME} = $_->{TITLE} = $newName for values %{$self->{SHARED}{SUBHIERS}};
+
+  $self->{PREVIEW}->title($newName);
+}
+
+###########################
+#
+# configure the main window preview
+# based on the configuration in the .zooz file
+#
+###########################
+
+sub setMW {
+  my ($self, $args) = @_;
+
+  my $t = delete $args->{title};
+
+  $self->{PREVIEW}->configure(%$args);
+  $self->{PREVIEW}->title($t) if defined $t;
 }
 
 ##############################

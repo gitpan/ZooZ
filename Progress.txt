@@ -10,9 +10,6 @@ IDEAS:
 
 NICE-TO-HAVES:
 --------------
-- Attempting to drop a widget on a container opens up the hierarchy view
-  of the container.
-- Borderwidths in preview are set to 1. In the dumped code, it is 2. FIX.
 - Make sure all the supported widgets have options in ZooZ::Options.pm.
 - Undo/Redo.
 - Callbacks need to have arguments.
@@ -87,6 +84,9 @@ DONE:
 - Change all DIE()s to Dialogs.
 - Renaming projects and widgets.
 - Dump .pm in addition to .pl. Package GUI into a mega widget.
+- Attempting to drop a widget on a container opens up the hierarchy view
+  of the container.
+- Borderwidths in preview are set to 1. In the dumped code, it is 2. FIX.
 
 Requirements:
 -------------

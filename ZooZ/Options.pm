@@ -14,6 +14,7 @@ our $maxHeight;
 
 our %options = ( # generics
 		Name                => ['Name'],
+		Title               => ['String'],
 		-activebackground   => ['Color'],
 		-activeborderWidth  => ['Integer', 'positive'],
 		-activeforeground   => ['Color'],
@@ -322,10 +323,10 @@ sub addOptionGrid {
 			 );
 
   } elsif ($type eq 'Callback') {
-    $$ref = 'Select Callback' unless $$ref;
+    #$$ref = 'Select Callback' unless $$ref;
     my $b;
 
-    $b = $frame->Button(-text         => $$ref,
+    $b = $frame->Button(-text         => $$ref || 'Select Callback',
 			-pady         => 0,
 			-command      => sub {
 			  my $cb = ZooZ::Forms->chooseCallback;

@@ -45,6 +45,13 @@ my (
     %ROWCOLDATA,
 
     %ignoreOptions,   # options to be hidden from user
+
+    # Tab options. for Notebooks
+    @TAB_OPTIONS,
+
+    # Menu configuration for toplevels.
+    %MENUDATA,
+    @MENUS,
    );
 
 %FORMS = (
@@ -54,6 +61,7 @@ my (
 	  chooseCallback  => 'Choose/Create Callback',
 	  chooseVarRef    => 'Choose/Create Variable',
 	  configureRowCol => 'Configure Row/Column',
+	  configureMenu   => 'Configure Menu',
 	 );
 
 # the options to ignore. Those can't (and shouldn't) be
@@ -68,6 +76,11 @@ $VARDATA{SIGIL}= {
 		  Array  => "\@",
 		  Hash   => "%"
 		 };
+
+# Tab options.
+@TAB_OPTIONS = qw(-anchor -bitmap -image -label
+		  -justify -createcmd -raisecmd
+		  -state -underline -wraplength);
 
 ###################
 #
@@ -840,6 +853,81 @@ EOT
   }
 }
 
+###############
+#
+# Setup the form to configure the menus.
+#
+###############
+
+sub setup_configureMenu {
+  my ($class, $top) = @_;
+
+  # Create a label that is easy to see to tell user what widget
+  # is being configured.
+  $top->Label(
+	      -textvariable => \$MENUDATA{FormName},
+	      -font         => 'WidgetName',
+	      -fg           => 'darkolivegreen',
+	      -bg           => 'white',
+	      -borderwidth  => 1,
+	      -relief       => 'ridge',
+	      -pady         => 5,
+	     )->grid(-row        => 0,
+		     -column     => 0,
+		     -columnspan => 2,
+		     -sticky     => 'ew');
+
+  my $hl = $top->Scrolled(HList       =>
+			  -scrollbars => 'se',
+			  -bg         => 'white',
+			  -header     => 1,
+			  -columns    => 4,
+			 )->grid(-row     => 1,
+				 -column  => 0,
+				 -rowspan => 2,
+				 -sticky  => 'nsew',
+				);
+
+  $hl->header(create => 0, -relief => 'raised', -text => 'Label');
+  $hl->header(create => 1, -relief => 'raised', -text => 'Type');
+  $hl->header(create => 2, -relief => 'raised', -text => 'Accelerator');
+  $hl->header(create => 3, -relief => 'raised', -text => 'Command');
+
+  my $det = $top->Labelframe(-text => 'Details',
+			    )->grid(-row    => 1,
+				    -column => 1,
+				    -sticky => 'ns',
+				   );
+#  my $but = $top->Frame->grid(-row    => 1,
+#			      -column => 2,
+#			      -sticky => 'ns',
+#			     );
+  my $but = $top->Frame->grid(-row    => 2,
+			      -column => 1,
+			      -sticky => 'ns',
+			     );
+
+  # create the buttons.
+  $but->Button(-text => 'Add',
+	      )->pack(qw/-side left -fill x -expand 1/);
+  $but->Button(-text => 'Delete Selected',
+	      )->pack(qw/-side left -fill x -expand 1/);
+
+  # now the details.
+  
+
+  $top->gridRowconfigure   (1, -weight => 1);
+  $top->gridColumnconfigure(0, -weight => 1);
+
+  $MENUDATA{HL} = $hl;
+
+  # bind for mouse wheel.
+  ZooZ::Generic::BindMouseWheel($top, sub {
+				  my $r = $CONFDATA{NB}->raised;
+				  ($CONFDATA{$r}->packSlaves)[0];
+				});
+}
+
 #########################
 #
 # This should be called as a static sub
@@ -890,6 +978,25 @@ sub changeWidgetName {
 
     $$n = $v;
   }
+}
+
+sub configureMenu {
+  my ($class,
+      $project,
+      $projid,
+      $name,
+      $widget,
+     ) = @_;
+
+  $MENUDATA{FormName} = $project->{PROJNAME} . '.' . $name;
+
+  $TOPLEVEL{configureMenu}->deiconify;
+#  $TOPLEVEL{configureMenu}->grab;
+#  $TOPLEVEL{configureMenu}->waitVariable(\$FONTDATA{localReturn});
+#  $TOPLEVEL{configureMenu}->grabRelease;
+#  $TOPLEVEL{configureMenu}->withdraw;
+
+#  return $FONTDATA{localReturn};
 }
 
 ###########################
@@ -969,6 +1076,35 @@ sub configureWidget {
 		       );
       }
 
+      # If it's a toplevel, add a title.
+      if (ref($widget) eq 'Tk::Toplevel') { # The name
+	my $title = $widget->title;#$project->{PROJNAME};
+
+	my $label = ZooZ::Options->addOptionGrid('Title',
+						 'Title',
+						 $f,
+						 1,
+						 0,
+						 \$title,
+						 'tan',
+						);
+
+	Tie::Watch->new(
+			-variable => \$title,
+			-store    => sub {
+			  my ($self, $v) = @_;
+
+			  $self->Store($v);
+			  $widget->title($title);
+			},
+			#[\&changeWidgetName,
+			#	      $project,
+			#	      \$name,
+			#	      $label,
+			#	      $projid,
+			#	      'tan'],
+		       );
+      }
       #$f->gridRowconfigure(1, -minsize => 10);
 
       my @conf = grep @$_ > 2, $widget->configure;
@@ -1025,11 +1161,21 @@ sub configureWidget {
       }
 
       $f->gridColumnconfigure(0,      -weight => 1);
-      #$f->gridRowconfigure   (++$row, -weight => 1);
 
       # Handle special tabs for special widgets.
       # For notebooks, add tab to add/delete pages.
       if (main::NOTEBOOK_SUPPORT && ref($widget) eq 'Tk::NoteBook') {
+	# add one tab.
+	# A notebook is allowed to have at least one tab.
+	my $defaultTabName  = 'Tab1';
+	my $defaultTabLabel = 'Tab 1';
+	my $tab1 = $widget->add($defaultTabName => -label => $defaultTabLabel);
+
+	# make room for it in the preview.
+	$tab1  ->GeometryRequest(100, 100);
+	$widget->Resize;
+
+	# create the toplevel.
 	$f->Button(-text    => 'Manage Pages',
 		   -command => sub {
 		     unless (exists $CONFDATA{NBCONF}{$projid}{$name}) {
@@ -1046,23 +1192,52 @@ sub configureWidget {
 
 		       my $lb = $lf->Scrolled(Listbox     =>
 					      -scrollbars => 'se',
-					      -selectmode => 'multiple',
+					      -selectmode => 'single',
 					     )->pack(qw/-fill both -expand 1/);
 
-		       $lf->Button(-text    => 'Delete Selected Page(s)',
+		       $lf->Button(-text    => 'Delete Selected Page',
 				   -command => sub {
-#				     my ($ind) = $l->curselection;
-#				     defined $ind or return;
+				     my ($ind) = $lb->curselection;
+				     defined $ind or return;
+				     my $sel   = $lb->get($ind);
 
 				     my @pages = $widget->pages;
-				     print "Pages are @pages.\n";
+
+				     print "There are ", scalar @pages, " pages ($ind).\n";
+				     # Can't delete if there is only one page.
+				     if (@pages == 1) {
+				       ZooZ::Generic::popMessage
+					   (-over  => $::MW,
+					    -msg   => "Must keep at least one tab!",
+					    -font  => 'Level',
+					    -bg    => 'White',
+					    -delay => 1500);
+				       return;
+				     }
+
+				     # delete the page.
+				     # should I prompt the user to confirm?
+				     # this will delete all children of the page.
+
+				     delete $CONFDATA{NBCONF}{$projid}{$name}{TABS}{$sel};
+				     $widget->delete($sel);
+
+				     # remove it from the lb.
+				     $lb->delete($ind);
+
+				     @pages = $widget->pages;
+				     print "Now there are ", scalar @pages, " pages.\n";
 				   })->pack(qw/-fill x -expand 1/);
 
 		       $CONFDATA{NBCONF}{$projid}{$name} = {
-							    TOP  => $t,
-							    LB   => $lb,
-							    OPTS => {},
+							    TOP   => $t,
+							    LB    => $lb,
+							    OPTS  => {},
+							    TABS  => {
+								      $defaultTabName => [$defaultTabLabel, $tab1],
+								     }
 							   };
+
 		       my $o = $CONFDATA{NBCONF}{$projid}{$name}{OPTS};
 
 		       my $p = $rf->Scrolled('Pane',
@@ -1071,9 +1246,7 @@ sub configureWidget {
 					    )->pack(qw/-fill both -expand 1/);
 
 		       my $row = 0;
-		       for my $option (qw(Name -anchor -bitmap -image -label -justify
-					  -createcmd -raisecmd -state -underline -wraplength)
-				      ) {
+		       for my $option (Name => @TAB_OPTIONS) {
 
 			 ZooZ::Options->addOptionGrid($option,
 						      $option,
@@ -1092,28 +1265,50 @@ sub configureWidget {
 				     my @pages = $widget->pages;
 				     if (grep $_ eq $o->{Name}, @pages) {
 				       ZooZ::Generic::popMessage
-					   ($::MW,
-					    "Page '$o->{Name}' already exists!",
-					    1500);
+					   (-over  => $::MW,
+					    -msg   => "Page '$o->{Name}' already exists!",
+					    -font  => 'Level',
+					    -bg    => 'White',
+					    -delay => 1500);
 				       return;
 				     }
 
 				     # add it.
-				     my $page = $widget->add($o->{Name}, map {
+				     my $tab = $widget->add($o->{Name}, map {
 				       $_ ne 'Name' && $o->{$_} ? ($_ => $o->{$_}) : ()
 				     } keys %$o);
-				     print "Page is $page.\n";
+
+				     # make room for it in the preview.
+				     $tab   ->GeometryRequest(100, 100);
+				     $widget->Resize;
+
+				     $CONFDATA{NBCONF}{$projid}{$name}{TABS}{$o->{Name}} = [$o->{-label}, $tab];
+				     $lb->insert(end => $o->{Name});
+
 				   })->pack(qw/-fill x/);
 
-		       #$p->
+		       # When a user clicks on a listbox entry, the options are updated.
+		       $lb->bind('<1>' => sub {
+				   my ($sel) = $lb->curselection;
+				   defined $sel or return;
+				   $sel    = $lb->get($sel);
+
+				   #my $tabs = $CONFDATA{NBCONF}{$projid}{$name}{TABS};
+				   $o->{Name} = $sel;
+				   $o->{$_}   = $widget->pagecget($sel, $_) for @TAB_OPTIONS;
+				 });
+
 		       $p->gridRowconfigure($row, -weight => 1);
 
 		       ZooZ::Generic::BindMouseWheel($t, $p);
 		     }
 
 		     # update the listbox.
-		     my $top = $CONFDATA{NBCONF}{$projid}{$name}{TOP};
-		     $top->deiconify;
+		     my $ref = $CONFDATA{NBCONF}{$projid}{$name};
+		     $ref->{LB}->delete(qw/0 end/);
+		     $ref->{LB}->insert(end => $_) for keys %{$ref->{TABS}};
+
+		     $ref->{TOP}->deiconify;
 		     #$top->waitVisibility;
 
 		   })->grid(-row        => $row,
@@ -1123,12 +1318,43 @@ sub configureWidget {
 			    -pady       => 10,
 			    -pady       => 5,
 			   );
+
+	# Check if we have menu builder support enabled.
+      } elsif (main::MENU_BUILDER_SUPPORT && ref($widget) eq 'Tk::Toplevel') {
+	$MENUS[$projid]{ENABLED} = 0;
+
+	my $lf;
+	my $cb = $f->Checkbutton(-text     => 'Add Menu',
+				 -variable => \$MENUS[$projid]{ENABLED},
+				 -command  => sub {
+				   if ($MENUS[$projid]{ENABLED}) {
+				     $_->configure(-state => 'normal')   for $lf->children;
+				   } else {
+				     $_->configure(-state => 'disabled') for $lf->children;
+				   }
+				 });
+
+	$lf = $f->Labelframe(#-text => 'Menus',
+			     -labelwidget => $cb,
+			     -relief      => 'ridge',
+			    )->grid(-row        => $row+1,
+				    -column     => 0,
+				    -sticky     => 'nsew',
+				    -columnspan => 3,
+				   );
+
+	$lf->Button(-text    => 'Configure Menu',
+		    -command => [\&configureMenu, __PACKAGE__, $project, $projid, $name, $widget],
+		   )->pack(qw/-fill both -expand 1/);
+
+	# initially .. set everything to disabled state.
+	$_->configure(-state => 'disabled') for $lf->children;
       }
 
     }
 
     # populate the placement options frame.
-    {
+    if (defined $Poptions) {
       my $f1 = $g->Labelframe(-text => "Stick to Which Container's Edge",
 			     )->pack(qw/-side top -fill both -expand 0/);
       my $f2 = $g->Labelframe(-text => "Internal Padding",
@@ -1227,7 +1453,7 @@ sub configureWidget {
     }
 
     # populate the extra options frame
-    {
+    if (defined $Eoptions) {
       # First, the scrollbars options.
       my $f1 = $h->Labelframe(-text => 'Scrollbars',
 			     )->pack(qw/-side top -fill both -expand 0/);
@@ -1353,6 +1579,10 @@ sub configureWidget {
 					   );
 
   $_->pack(qw/-fill both -expand 1/) for @{$CONFDATA{FORMS}{$projid}{$name}};
+
+  # set the state of the tabs.
+  $CONFDATA{NB}->pageconfigure(NBPLACE => -state => defined $Poptions ? 'normal' : 'disabled');
+  $CONFDATA{NB}->pageconfigure(NBEXTRA => -state => defined $Eoptions ? 'normal' : 'disabled');
 
   # pop-up the window if we have to.
   unless ($top->ismapped) {
