@@ -144,7 +144,7 @@ push @{$availableWidgets{datadisp}} => 'NoteBook' if NOTEBOOK_SUPPORT;
 #
 # Inits
 #
-$VERSION      = '1.0-RC4';
+$VERSION      = '1.1';
 $PROJID       = 0;
 $NO_SPLASH    = DEBUG? 1 : 0;
 $WARNINGS_ON  = 1;
