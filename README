@@ -1,0 +1,79 @@
+NAME
+    ZooZ.pl - A Perl/Tk GUI builder in pure Perl/Tk.
+
+SYNOPSIS
+        % perl ZooZ.pl
+
+DESCRIPTION
+    ZooZ is a GUI builder for Perl/Tk written in pure Perl/Tk. It has the
+    following features:
+
+    *   Intuitive interface.
+
+    *   Support for a wide variety of widgets.
+
+    *   Ability to save/load projects.
+
+    *   Ability to dump stand-alone Perl code.
+
+    *   Includes a simple IDE for defining variables and subroutines.
+
+STATUS AND LIMITATIONS
+    Currently, ZooZ.pl is still in beta. So use at your own risk. At this
+    stage, though, I consider it to be very usable. There are some major
+    limitations though. Here is a list of the ones I consider major, and
+    will probably fix before a 1.0 release. For a more comprehensive list of
+    missing features, you can look into the Progress.txt file that comes in
+    the root directory of the distribution.
+
+    *   The preview window displays all widgets with borderwidth of 1. The
+        dumped Perl code has it set to 2.
+
+    *   No support, yet, for user-defined widgets.
+
+    *   User can not change widget names.
+
+    *   No way to define bindings.
+
+    *   No way to set MainWindow properties.
+
+REQUIREMENTS
+    To run ZooZ, you need Tk804, which in turn needs Perl 5.8 or better. I
+    will probably support Tk800 sometime in the future, in which case any
+    Perl5 version will be supported.
+
+    In addition Tk::ToolBar is required. Again, I will probably make this
+    optional in a future release.
+
+OPTIONAL COMPONENTS
+    Tk::CodeText is optional. If present it will be used in the simple IDE
+    to highlight user-entered Perl code. If missing, a regular Tk::Text will
+    be used.
+
+TIPS
+    *   ZooZ automatically defines a hash called *%ZWIDGETS* that holds the
+        project's widgets. This allows the user to access any widget inside
+        of a callback via *$ZWIDGETS{WidgetName}* where WidgetName is the
+        name of the widget.
+
+    *   You can click on the row and column numbers to configure their
+        properties.
+
+    *   If you want a row or column to take up more space than it currently
+        does, then increase its greediness. Remember that widgets are
+        confined to the space of the grids they occupy.
+
+BUGS
+    You tell me! If you think you found a bug, or you want to discuss
+    anything ZooZ-related, then please drop me a note at
+    *aqumsieh@cpan.org*.
+
+ACKNOWLEDGEMENTS
+    I'm indebted to everyone on comp.lang.perl.tk for constructive comments
+    and bug reports.
+
+COPYRIGHTS
+    Copyright 2004 - Ala Qumsieh.
+
+    This program is distributed under the same terms as Perl itself.
+
