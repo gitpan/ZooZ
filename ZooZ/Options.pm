@@ -13,6 +13,7 @@ our $maxHeight;
 # this package defines all the options and their possible values.
 
 our %options = ( # generics
+		Name                => ['Name'],
 		-activebackground   => ['Color'],
 		-activeborderWidth  => ['Integer', 'positive'],
 		-activeforeground   => ['Color'],
@@ -24,6 +25,7 @@ our %options = ( # generics
 		-borderwidth        => ['Integer', 'positive'],
 		-command            => ['Callback'],
 		-compound           => ['TBD'],
+		-createcmd          => ['Callback'],
 		-cursor             => ['Image'],
 		#-dash              => [],
 		-default            => ['TBD'],
@@ -47,6 +49,7 @@ our %options = ( # generics
 		-ipady              => [qw/Integer positive/],
 		-jump               => ['Boolean'],
 		-justify            => [qw/List left right center/],
+		-label              => ['String'],
 		-minsize            => [qw/Integer positive/],  # for gridConfigure
 		-offset             => [qw/List n s e w ne se sw nw center/],
 		-offvalue           => ['String'],
@@ -55,6 +58,7 @@ our %options = ( # generics
 		-pad                => [qw/Integer positive/],  # for gridConfigure
 		-padx               => [qw/Integer positive/],
 		-pady               => [qw/Integer positive/],
+		-raisecmd           => ['Callback'],
 		-relief             => [qw/List raised sunken flat ridge solid groove/],
 		-repeatdelay        => [qw/Integer positive/],
 		-repeatinterval     => [qw/Integer positive/],
@@ -103,6 +107,8 @@ our %options = ( # generics
 # 7. additional args that depend on type of option.
 #    for -font,     $args[0] is a ZooZ::Fonts object.
 #    for Callbacks, $args[0] is a ZooZ::Callbacks object.
+#    for varrefs,   $args[0] is a ref to the -text var ref.
+#    for Name,      $args[0] is an optional bg color of the label.
 
 sub addOptionGrid {
   my ($class,
@@ -258,7 +264,7 @@ sub addOptionGrid {
 		  -textvariable    => $ref,
 		  -validate        => 'key',
 		  -validatecommand => sub {
-		    return 1 unless $_[4] == 1;
+		    return 1 unless $_[4] == 1 || $_[4] == 8;  # Tk800 and Tk804
 		    return 0 unless $_[1] =~ /$rgx/;
 		    return 1;
 		  },
@@ -289,22 +295,31 @@ sub addOptionGrid {
 
   } elsif ($type eq 'Font') {
     $$ref ||= 'Default';
-    my $b;
-    $b = $frame->Button(
-			-text         => 'Change Font',
-			-font         => $$ref,
-			-pady         => 0,
-			-command      => sub {
-			  my $f = ZooZ::Forms->chooseFont;
-			  if ($f) {
-			    $$ref = $f;
-			    $b->configure(-font => $f);
-			  }
-			})->grid(-column     => $col + 1,
-				 -row        => $row,
-				 -columnspan => 2,
-				 -sticky     => 'ew',
-				);
+    $frame->Entry(-textvariable  => $ref,
+		  -relief        => 'flat',
+		  -state         => 'disabled',
+		  -disabledforeground => 'black',
+		 )->grid(-column => $col + 1,
+			 -row    => $row,
+			 -sticky => 'ew',
+			);
+    $frame->Button(
+		   -bitmap  => 'transparent',
+		   -fg      => Tk::NORMAL_BG,
+		   -height  => 9,
+		   -width   => 9,
+		   -command => sub {
+		     my $f = ZooZ::Forms->chooseFont;
+		     return unless $f;
+
+		     $$ref = $f;
+		     #$l->configure(-text => $f);
+		   },
+		  )->grid(-column => $col + 2,
+			  -row    => $row,
+			  -padx   => 1,
+			  -sticky => 'ew',
+			 );
 
   } elsif ($type eq 'Callback') {
     $$ref = 'Select Callback' unless $$ref;
@@ -315,6 +330,12 @@ sub addOptionGrid {
 			-command      => sub {
 			  my $cb = ZooZ::Forms->chooseCallback;
 			  return unless $cb;
+
+			  if ($cb eq 'UNSET') {
+			    $b->configure(-text => 'Select Callback');
+			    $$ref = undef;
+			    return;
+			  }
 
 			  $b->configure(-text => '\&' . $cb);
 			  $$ref = eval "\\&$cb";
@@ -337,6 +358,19 @@ sub addOptionGrid {
 			  my $vr = ZooZ::Forms->chooseVar;
 			  return unless $vr;
 
+			  if ($vr eq 'UNSET') {
+			    $b->configure(-text => 'Select Variable');
+			    $$ref = '';
+
+			    # if a textvariable, reset the -text.
+			    # it doesn't happen automatically.
+			    if ($option eq '-textvariable') {
+			      $ {$args[0]} .= '';  # it is tied.
+			    }
+
+			    return;
+			  }
+
 			  $b->configure(-text => "\\" . $vr);
 
 			  my $cp = $vr;
@@ -354,6 +388,22 @@ sub addOptionGrid {
 				 -columnspan => 2,
 				 -sticky     => 'ew',
 				);
+
+  } elsif ($type eq 'Name') {
+    $frame->Entry(
+		  -textvariable      => $ref,
+		  -validate          => 'key',
+		  -validatecommand   => sub { #disallow spaces
+		    return 1 unless $_[4] == 1 || $_[4] == 8;  # Tk800 and Tk804
+		    return 0 if     $_[1] =~ /\s/;
+		    return 1;
+		  })->grid(-column     => $col + 1,
+			 -row        => $row,
+			 -columnspan => 2,
+			 -sticky     => 'ew',
+			);
+
+    $label->configure(-font => 'Default', -relief => 'solid', -bg => $args[0] || Tk::NORMAL_BG);
   }
 
   # configure the row to make it look nice.

@@ -27,6 +27,9 @@ our %defaultWidgetArgs = (
 			    my $n = shift;
 			    return {-text     => $n };
 			  },
+			  Optionmenu => sub {
+			    return {-textvariable => undef};
+			  },
 			  #			  Frame        => sub {  # Pane .. really
 			  #			    return {
 			  #				    #-gridded => 'xy',

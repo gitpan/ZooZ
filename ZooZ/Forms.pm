@@ -153,11 +153,11 @@ sub setup_chooseFont {
 						 Listbox);
 
   my $f1 = $top->Frame->pack(qw/-side top -fill both -expand 1/);
-  my $f2 = $top->Labelframe(-text      => 'Sample Font',
+  my $f2 = $top->Labelframe(-text      => 'Preview',
 			    -height    => 200,
 			   )->pack(qw/-side bottom -fill x/);
 
-  my $f3 = $f1->Labelframe(-text   => 'Defined Fonts',
+  my $f3 = $f1->Labelframe(-text   => 'Previously Used Fonts',
 			  )->pack(qw/-side left -fill both -expand 1/);
   my $l3 = $f3->Scrolled(qw/Listbox -scrollbars se/,
 			 -exportselection => 0,
@@ -174,7 +174,7 @@ sub setup_chooseFont {
 
   my $F4 = $f1->Frame->pack(qw/-side left -fill y -expand 0/);
   my $f5 = $F4->Labelframe(-text     => 'Extra Options',
-			)->pack(qw/-side top -fill none -expand 0 -anchor n/);
+			)->pack(qw/-side top -fill y -expand 1 -anchor n/);
 
   $_->Subwidget('xscrollbar')->configure(-borderwidth => 1) for $l3, $l4;
   $_->Subwidget('yscrollbar')->configure(-borderwidth => 1) for $l3, $l4;
@@ -182,55 +182,24 @@ sub setup_chooseFont {
   # populate family list.
   $l4->insert(end => $_) for sort $top->fontFamilies;
 
-  # populate registered font list.
-  $l3->insert(end => $_) for sort $::FONTOBJ->listAll;
-
-  $F4->Button(-text => 'Register Font',
+  $F4->Button(-text => 'Ok',
 	      -command => sub {
 		my $name = "$FONTDATA{family} $FONTDATA{size} $FONTDATA{weight} $FONTDATA{slant} " .
 		  ($FONTDATA{underline} ? 'u ' : '') . ($FONTDATA{overstrike} ? 'o': '');
+		$name =~ y/ /_/;
 
-		# don't do anything if font already exists.
-		return if $::FONTOBJ->FontExists($name);
+		#print "Name is $name.\n";
+		# register it unless font already exists.
+		unless ($::FONTOBJ->FontExists($name)) {
+		  # create it and register it.
+		  my $obj = $top->fontCreate($name,
+					     map {
+					       '-' . $_ =>  $FONTDATA{$_}
+					     } qw/family size weight slant underline overstrike/);
+		  $::FONTOBJ->add($name, $obj);
+		}
 
-		# create it and register it.
-		my $obj = $top->fontCreate($name,
-					   map {
-					     '-' . $_ =>  $FONTDATA{$_}
-					   } qw/family size weight slant underline overstrike/);
-		$::FONTOBJ->add($name, $obj);
-
-		$l3->insert(end => $name);
-	      })->pack(qw/-side top -padx 5 -pady 0 -fill x/);
-
-  # DO I NEED THIS BUTTON??????
-  $F4->Button(-text => 'Delete Font',
-	      -command => sub {
-		my ($sel) = $l3->curselection;
-		defined $sel or return;
-
-		my $nam = $l3->get($sel);
-		my $ans = $top->Dialog
-		  (-title   => 'Are you sure?',
-		   -bitmap  => 'question',
-		   -buttons => [qw/Yes No/],
-		   -text    => <<EOT)->Show;
-Are you sure you want to delete
-font '$nam'?
-EOT
-  ;
-		return if $ans eq 'No';
-		$::FONTOBJ->remove($nam);
-		$l3->delete($sel);
-	      })->pack(qw/-side top -padx 5 -pady 0 -fill x/);
-
-  $F4->Button(-text => 'Return Selected',
-	      -command => sub {
-		my ($sel) = $l3->curselection;
-		$sel      = $l3->get($sel) if defined $sel;
-		$sel    ||= 'Default';
-
-		$FONTDATA{localReturn} = $sel;
+		$FONTDATA{localReturn} = $name;
 	      })->pack(qw/-side top -padx 5 -pady 0 -fill x/);
 
   $F4->Button(-text    => 'Cancel',
@@ -353,6 +322,8 @@ EOT
   $top->protocol(WM_DELETE_WINDOW => sub {
 		   $FONTDATA{localReturn} = '';
 		 });
+
+  $FONTDATA{list} = $l3;
 }
 
 sub setup_chooseCallback {
@@ -466,33 +437,33 @@ EOT
 
   # AGAIN: Do I really need this?
   if (0) {
-  $f2->Button(-text    => 'Delete Selected Sub',
-	      -height  => 2,
-	      -command => sub {
-		my ($sel) = $l->curselection;
-		defined $sel or return;
+    $f2->Button(-text    => 'Delete Selected Sub',
+		-height  => 2,
+		-command => sub {
+		  my ($sel) = $l->curselection;
+		  defined $sel or return;
 
-		my $nam = $l->get($sel);
-		my $ans = $top->Dialog
-		  (-title   => 'Are you sure?',
-		   -bitmap  => 'question',
-		   -buttons => [qw/Yes No/],
-		   -font    => 'Questions',
-		   -text    => <<EOT)->Show;
+		  my $nam = $l->get($sel);
+		  my $ans = $top->Dialog
+		    (-title   => 'Are you sure?',
+		     -bitmap  => 'question',
+		     -buttons => [qw/Yes No/],
+		     -font    => 'Questions',
+		     -text    => <<EOT)->Show;
 Are you sure you want to delete
 callback '$nam' with its
 associated code?
 EOT
   ;
-		return if $ans eq 'No';
-		$::CALLBACKOBJ->remove($nam);
-		$l->delete($sel);
-		$r->delete(qw/0.0 end/);
-		# TBD: Must check if any widgets are using this
-		#      callback. If so, either fix that, or don't
-		#      delete the callback.
-	      })->pack(qw/-side left -fill x -expand 1/);
-}
+		  return if $ans eq 'No';
+		  $::CALLBACKOBJ->remove($nam);
+		  $l->delete($sel);
+		  $r->delete(qw/0.0 end/);
+		  # TBD: Must check if any widgets are using this
+		  #      callback. If so, either fix that, or don't
+		  #      delete the callback.
+		})->pack(qw/-side left -fill x -expand 1/);
+  }
 
   $f2->Button(-text    => 'Rename Selected Sub',
 	      -height  => 2,
@@ -568,6 +539,11 @@ EOT
 
 		$CBDATA{localReturn} = $sel;
 	      })->pack(qw/-side left -fill x -expand 1/);
+
+  $f2->Button(-text    => "Return Nothing\n(Unsets binding)",
+	      -command => sub {
+		$CBDATA{localReturn} = 'UNSET';
+	      })->pack(qw/-side left -fill both -expand 1/);
 
   $f2->Button(-text    => 'Cancel',
 	      -height  => 2,
@@ -700,6 +676,11 @@ EOT
 		my ($sel)             = $l->curselection;
 		$VARDATA{localReturn} = $l->get($sel) if defined $sel;
 	      })->pack(qw/-side left -fill x -expand 1/);
+
+  $f2->Button(-text    => "Return Nothing\n(Unsets binding)",
+	      -command => sub {
+		$VARDATA{localReturn} = 'UNSET';
+	      })->pack(qw/-side left -fill both -expand 1/);
 
   $f2->Button(-text    => 'Cancel',
 	      -height  => 2,
@@ -891,6 +872,26 @@ sub deleteWidget {
   delete $CONFDATA{$projid}{$name};
 }
 
+sub changeWidgetName {
+  my ($self, $v) = @_;
+
+  $self->Store($v);
+
+  my $args                = $self->Args('-store');
+  my ($p, $n, $l, $i, $c) = @$args;
+
+  my $col = $p->renameWidget($$n, $v) ? $c : 'red';
+  $l->configure(-bg => $col);
+
+  if ($col eq $c) { # went fine.
+    # now must fix up the frame hashes.
+    $CONFDATA{FORMS}{$i}{$v} = delete $CONFDATA{FORMS}{$i}{$$n};
+    $CONFDATA{WidgetName}    = $v;
+
+    $$n = $v;
+  }
+}
+
 ###########################
 #
 # This method pops up the widget configuration form
@@ -944,8 +945,34 @@ sub configureWidget {
     # populate the widget options frame
     {
       my $f = $f->Frame->pack(qw/-side top -fill x/);
+
+      { # The name
+	my $name2 = $name;
+
+	my $label = ZooZ::Options->addOptionGrid('Name',
+						 'Name',
+						 $f,
+						 0,
+						 0,
+						 \$name2,
+						 'tan',
+						);
+
+	Tie::Watch->new(
+			-variable => \$name2,
+			-store    => [\&changeWidgetName,
+				      $project,
+				      \$name,
+				      $label,
+				      $projid,
+				      'tan'],
+		       );
+      }
+
+      #$f->gridRowconfigure(1, -minsize => 10);
+
       my @conf = grep @$_ > 2, $widget->configure;
-      my $row  = 0;
+      my $row  = 2;
       for my $c (@conf) {
 	my $option = $c->[0];
 
@@ -959,22 +986,26 @@ sub configureWidget {
 	###            This prevents a 'panic' crash in ptk.
 	###            Not sure I understand why.
 
-	$Woptions->{$option} = '' if $option eq '-variable';
+	$Woptions->{$option} = '' if $option eq '-variable' || $option eq '-textvariable';
 
 	my @extra;   # additional options to be passed to ZooZ::Options::addOptionGrid
 
-	if ($option eq '-font') {
-	  $widget->configure(-font => 'Default');
-	  @extra = ($::FONTOBJ);
+#	if ($option eq '-font') {
+#	  $widget->configure(-font => 'Default');
+#	  @extra = ($::FONTOBJ);
 
-	} elsif ($option eq '-command') {
-	  @extra = ($::CALLBACKOBJ);
+#	} elsif ($option eq '-command') {
+#	  @extra = ($::CALLBACKOBJ);
 
-	} elsif ($option =~ /^-(?:text)?variable$/) {
-	  @extra = ($::VARREFOBJ);
+#	} elsif ($option =~ /^-(?:text)?variable$/) {
+#	  @extra = ($::VARREFOBJ);
 
-	} else {
-	  @extra = ();
+#	} else {
+#	  @extra = ();
+#	}
+
+	if ($option eq '-textvariable') {
+	  @extra = (\$Woptions->{-text});
 	}
 
 	my $label = ZooZ::Options->addOptionGrid($option,
@@ -995,6 +1026,105 @@ sub configureWidget {
 
       $f->gridColumnconfigure(0,      -weight => 1);
       #$f->gridRowconfigure   (++$row, -weight => 1);
+
+      # Handle special tabs for special widgets.
+      # For notebooks, add tab to add/delete pages.
+      if (main::NOTEBOOK_SUPPORT && ref($widget) eq 'Tk::NoteBook') {
+	$f->Button(-text    => 'Manage Pages',
+		   -command => sub {
+		     unless (exists $CONFDATA{NBCONF}{$projid}{$name}) {
+		       my $t = $f->toplevel->Toplevel;
+		       $t->withdraw;
+		       $t->title   ("Notebook Configuration - $name");
+		       $t->protocol(WM_DELETE_WINDOW => [$t => 'withdraw']);
+
+		       # populate it.
+		       my $lf = $t->Labelframe(-text => 'Current Pages',
+					      )->pack(qw/-fill both -side left -expand 1/);
+		       my $rf = $t->Labelframe(-text => 'Add Page',
+					      )->pack(qw/-fill both -side right -expand 1/);
+
+		       my $lb = $lf->Scrolled(Listbox     =>
+					      -scrollbars => 'se',
+					      -selectmode => 'multiple',
+					     )->pack(qw/-fill both -expand 1/);
+
+		       $lf->Button(-text    => 'Delete Selected Page(s)',
+				   -command => sub {
+#				     my ($ind) = $l->curselection;
+#				     defined $ind or return;
+
+				     my @pages = $widget->pages;
+				     print "Pages are @pages.\n";
+				   })->pack(qw/-fill x -expand 1/);
+
+		       $CONFDATA{NBCONF}{$projid}{$name} = {
+							    TOP  => $t,
+							    LB   => $lb,
+							    OPTS => {},
+							   };
+		       my $o = $CONFDATA{NBCONF}{$projid}{$name}{OPTS};
+
+		       my $p = $rf->Scrolled('Pane',
+					     -sticky     => 'nsew',
+					     -scrollbars => 'e',
+					    )->pack(qw/-fill both -expand 1/);
+
+		       my $row = 0;
+		       for my $option (qw(Name -anchor -bitmap -image -label -justify
+					  -createcmd -raisecmd -state -underline -wraplength)
+				      ) {
+
+			 ZooZ::Options->addOptionGrid($option,
+						      $option,
+						      $p,
+						      $row++,
+						      0,
+						      \$o->{$option},
+						     );
+		       }
+
+		       $rf->Button(-text    => 'Add Page',
+				   -command => sub {
+				     return unless $o->{Name};
+
+				     # does the page exist?
+				     my @pages = $widget->pages;
+				     if (grep $_ eq $o->{Name}, @pages) {
+				       ZooZ::Generic::popMessage
+					   ($::MW,
+					    "Page '$o->{Name}' already exists!",
+					    1500);
+				       return;
+				     }
+
+				     # add it.
+				     my $page = $widget->add($o->{Name}, map {
+				       $_ ne 'Name' && $o->{$_} ? ($_ => $o->{$_}) : ()
+				     } keys %$o);
+				     print "Page is $page.\n";
+				   })->pack(qw/-fill x/);
+
+		       #$p->
+		       $p->gridRowconfigure($row, -weight => 1);
+
+		       ZooZ::Generic::BindMouseWheel($t, $p);
+		     }
+
+		     # update the listbox.
+		     my $top = $CONFDATA{NBCONF}{$projid}{$name}{TOP};
+		     $top->deiconify;
+		     #$top->waitVisibility;
+
+		   })->grid(-row        => $row,
+			    -column     => 0,
+			    -sticky     => 'nsew',
+			    -columnspan => 3,
+			    -pady       => 10,
+			    -pady       => 5,
+			   );
+      }
+
     }
 
     # populate the placement options frame.
@@ -1262,6 +1392,13 @@ sub addScrolls {
 
 sub chooseFont {
   my ($class, $ref) = @_;
+
+  # update the list.
+  {
+    $FONTDATA{list}->delete(qw/0 end/);
+    $FONTDATA{list}->insert(end => $_) for
+      'Default', grep $_ ne 'Default' => sort $::FONTOBJ->listAll;
+  }
 
   $FONTDATA{localReturn} = '';
   $TOPLEVEL{chooseFont}->deiconify;

@@ -155,6 +155,10 @@ sub _createHierList {
 				       },
 				      )->pack(qw/-side right -fill y/);
 
+  $self->{TOP}->Adjuster(-widget => $tree,
+			 -side   => 'right',
+			)->pack(qw/-side right -fill y/);
+
   $tree->Subwidget($_)->configure(-borderwidth => 1) for qw/xscrollbar yscrollbar/;
 
   # create the entry for the main window.
@@ -570,19 +574,31 @@ sub dropWidget {
   # is it an empty location?
   # If NOT empty and widget to be dropped is a parasite
   # (ex. scrollbar), then add it to the currently placed widget.
+  # If NOT empty and widget to be dropped is not a parasite
+  # AND grid contains a container, then open up container view.
 
   if ($ref->{WIDGET}) {
     # not empty.
-    # Go on ONLY if parasite.
-    ZooZ::Generic::popMessage($::MW, 'Please click on an empty grid location.', 1500) &&
-	return undef unless $::SELECTED_W =~ $isParasite;
+    # Go on ONLY if parasite on scrollable widget OR
+    # non-parasite on a container.
+    if ($::SELECTED =~ $isParasite) {
 
-    # If scrollbar, then make object scrolled if it is scrollable.
-    if ($::SELECTED_W =~ /scroll/i) {
-      ZooZ::Generic::popMessage($::MW, "Widget $ref->{WIDGET} is not scrollable!", 1500) &&
-	  return undef unless exists $scrollable{$ref->{WIDGET}};
+      # If scrollbar, then make object scrolled if it is scrollable.
+      if ($::SELECTED_W =~ /scroll/i) {
+	ZooZ::Generic::popMessage($::MW, "Widget $ref->{WIDGET} is not scrollable!", 1500) &&
+	    return undef unless exists $scrollable{$ref->{WIDGET}};
 
-      $ref->{ECONF}{SCROLLON} = 1;
+	$ref->{ECONF}{SCROLLON} = 1;
+      }
+
+    } else {
+      # not a parasite.
+      # is it a container.
+      ZooZ::Generic::popMessage($::MW, 'Please click on an empty grid location.', 1500) &&
+	  return undef unless $ref->{WIDGET} =~ $isContainer;
+
+      $self->descendHier($ref->{LABEL});
+      return undef;
     }
 
     return 1;
@@ -1041,6 +1057,9 @@ sub deleteSelectedWidget {
   # clean up the widget properties window.
   ZooZ::Forms->deleteWidget($self->{PROJID}, $ref->{NAME});
 
+  # remove it from the shared hash
+  delete $self->{SHARED}{ALL_WIDGETS}{$ref->{NAME}};
+
   # clean up the preview window.
   $ref->{PREVIEW}->destroy;
 
@@ -1089,7 +1108,7 @@ sub updatePreviewWindow {
 sub descendHier {
   my $self = shift;
 
-  my $lab  = $self->{SELECTED};
+  my $lab  = shift || $self->{SELECTED};
 
   # hide the current. unhide the child.
   #$self->_hideCanvas;
@@ -1575,6 +1594,7 @@ sub loadWidget {
 
   for my $h (qw/WCONF PCONF/) {
     for my $k (keys %{$data->{$h}}) {
+
       if ($h eq 'PCONF' && $k eq '-sticky') {
 	$ref->{$h}{$1} = $1 while $data->{$h}{$k} =~ /(.)/g;
       }
@@ -1614,7 +1634,7 @@ sub loadWidget {
       $v = \$ {"main::$v"};
     }
 
-    $ref->{WCONF}{$k} = $v if $v;
+    $ref->{WCONF}{$k} = $v if defined $v;
   }
 
   for my $k (keys %{$ref->{ECONF}}) {
@@ -1642,9 +1662,11 @@ sub loadWidget {
 #################
 
 sub dumpPerl {
-  my ($self, $fh, $parent) = @_;
+  my ($self, $fh, $module, $parent) = @_;
 
   $parent ||= '$MW';
+
+  my $spaces = $module ? '  ' : '';
 
   # initialize image controls.
   $self->{SHARED}{IMAGES}   ||= {};
@@ -1681,16 +1703,16 @@ sub dumpPerl {
 
       print $fh "
 
-# Widget $ref->{NAME} isa $ref->{WIDGET}
-\$ZWIDGETS{$ref->{NAME}} = $parent->Scrolled('$type',";
+$spaces# Widget $ref->{NAME} isa $ref->{WIDGET}
+$spaces\$ZWIDGETS{'$ref->{NAME}'} = $parent->Scrolled('$type',";
 
       push @pairs => [-scrollbars => "'$sloc'"];
 
     } else {
       print $fh "
 
-# Widget $ref->{NAME} isa $ref->{WIDGET}
-\$ZWIDGETS{$ref->{NAME}} = $parent->$type(";
+$spaces# Widget $ref->{NAME} isa $ref->{WIDGET}
+$spaces\$ZWIDGETS{'$ref->{NAME}'} = $parent->$type(";
     };
 
     for my $k (sort keys %{$ref->{WCONF}}) {
@@ -1737,17 +1759,17 @@ sub dumpPerl {
       }
 
       # quote it if it's a bareword. IE. Unless it's a ref or a number.
-      $v = "'$v'" unless $v =~ m{
-				 ^[-\d]+$   # a number
-				 |
-				 ^\\       # a reference
-				}x;
+      $v =~ s/'/\\'/g, $v = "'$v'" unless $v =~ m{
+						  ^[-\d]+$   # a number
+						  |
+						  ^\\       # a reference
+						 }x;
 
       push @pairs => [$k, $v];
     }
 
     if (@pairs) {
-      print $fh "\n", lineUpCommas(@pairs), "\n  )->grid(";
+      print $fh "\n", ZooZ::Generic::lineUpCommas(@pairs), "\n  )->grid(";
 
     } else {
       print $fh ")->grid(";
@@ -1766,11 +1788,11 @@ sub dumpPerl {
 		      $ref->{PCONF}{$_} : "'$ref->{PCONF}{$_}'"
 		     ] for qw/-sticky -ipadx -ipady -padx -pady/;
 
-    print $fh "\n", lineUpCommas(@pairs), "\n  );";
+    print $fh "\n", ZooZ::Generic::lineUpCommas(@pairs), "\n  );";
 
     # if a container, then call recursively.
     if (exists $self->{SHARED}{SUBHIERS}{$lab}) {
-      $self->{SHARED}{SUBHIERS}{$lab}->dumpPerl($fh, '$ZWIDGETS{' . $ref->{NAME} . '}');
+      $self->{SHARED}{SUBHIERS}{$lab}->dumpPerl($fh, $module, '$ZWIDGETS{' . $ref->{NAME} . '}');
     }
   }
 
@@ -1786,8 +1808,8 @@ sub dumpPerl {
       my @data = map [$_, $data{$_}] => grep $data{$_} => keys %data;
       @data or next;
 
-      print $fh "\n$parent->gridColumnconfigure($col,\n",
-	lineUpCommas(@data), "\n  );\n";
+      print $fh "\n$spaces$parent->gridColumnconfigure($col,\n",
+	ZooZ::Generic::lineUpCommas(@data), "\n  );\n";
     }
 
     # then the rows.
@@ -1798,15 +1820,10 @@ sub dumpPerl {
       my @data = map [$_, $data{$_}] => grep $data{$_} => keys %data;
       @data or next;
 
-      print $fh "\n$parent->gridRowconfigure($row,\n",
-	lineUpCommas(@data), "\n  );\n";
+      print $fh "\n$spaces$parent->gridRowconfigure($row,\n",
+	ZooZ::Generic::lineUpCommas(@data), "\n  );\n";
     }
   }
-}
-
-sub lineUpCommas {
-  my $len = (sort {$b <=> $a} map length $_->[0] => @_)[0];
-  return join "\n" => map {sprintf "   %-$ {len}s => %s," => @$_} @_;
 }
 
 #############
@@ -1831,6 +1848,65 @@ sub closeMe {
 #############
 
 sub getImageHash { $_[0]{SHARED}{IMAGES} }
+
+#############
+#
+# Sub to rename a widget.
+#
+#############
+
+sub renameWidget {
+  my ($self, $oldName, $newName) = @_;
+
+  return 0 unless        $newName;
+  return 0 unless exists $self->{SHARED}{NAME2LABEL}{$oldName};
+  return 0 if     exists $self->{SHARED}{NAME2LABEL}{$newName};
+
+  # modify the db's keys and values.
+  my $lab     = $self->{SHARED}{NAME2LABEL}{$newName}
+              = delete $self->{SHARED}{NAME2LABEL}{$oldName};
+  my ($r, $c) = @{$self->{LABEL2GRID}{$lab}};
+
+  $self->{GRID}[$r][$c]{NAME}            = $newName;
+  $self->{SHARED}{ALL_WIDGETS}{$newName} = delete $self->{SHARED}{ALL_WIDGETS}{$oldName};
+
+  # update the tree text.
+  $self->{TREE}->entryconfigure($self->{HIERTOP} . '.' . $lab,
+				-text => $newName);
+
+  # update the Icon label.
+  {
+    my $w = lc $self->{GRID}[$r][$c]{WIDGET};
+
+    my $c = $lab->Compound;
+    if (exists $self->{ICONS}{$w}) {
+      $c->Image(-image => $self->{ICONS}{$w});
+    } else {
+      $c->Bitmap(-bitmap => 'error');
+    }
+    $c->Line;
+    $c->Text(-text => $newName,
+	     -font => 'WidgetName',
+	    );
+    my $o = $lab->cget('-image');
+    $lab->configure(-image => $c);
+    $o->destroy;
+  }
+
+  return 1;
+}
+
+#######################
+#
+# rename the project. Just symbolic.
+#
+#######################
+
+sub renameProject {
+  my ($self, $newName) = @_;
+
+  $_->{PROJNAME} = $newName for values %{$self->{SHARED}{SUBHIERS}};
+}
 
 ##############################
 #

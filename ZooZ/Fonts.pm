@@ -21,8 +21,8 @@ sub add {
 }
 
 sub remove     { delete $_[0]{FONTS}{$_[1]} }
-sub listAll    { keys %{$_[0]{FONTS}} }
-sub obj        { $_[0]{FONTS}{$_[1]} }
+sub listAll    { keys %{$_[0]{FONTS}}       }
+sub obj        { $_[0]{FONTS}{$_[1]}        }
 sub FontExists { exists $_[0]{FONTS}{$_[1]} }
 sub index      { $_[0]->{I}++ }
 

@@ -28,6 +28,7 @@ sub BindMouseWheel {
   }
 }
 
+
 ########
 #
 # This method pops up a message for the user.
@@ -37,74 +38,148 @@ sub BindMouseWheel {
 #
 ########
 
-my $msgFrame;
-my $msgLabel;
-my ($msgX, $msgY, $msgDelay);
-my $msgMoving = 0;
+my @msgFrames;
+my @msgLabels;
+my (@msgX, @msgY, @stopY);
 
 sub popMessage {
-  return if $msgMoving;
+  my %hash     = @_;
 
-  my ($over, $msg) = @_;
+  my $over     = delete $hash{-over}  or return undef;
+  my $msg      = delete $hash{-msg}   or return undef;
+  my $msgDelay = delete $hash{-delay} || 3000;  # 3 secs
 
-  $msgDelay = $_[2] || 3000;  # 3 secs
+  # find first id.
+  my $id = 0;
+  $id++ while defined $msgX[$id];
 
-  unless ($msgFrame) {
-    $msgFrame = $::MW->Frame(qw/-bd 1 -relief solid/);
-    $msgLabel = $msgFrame->Label(qw/-padx 20 -pady 20/,
-				 -bg   => 'white',
-				 -font => 'Level',
-				)->pack(qw/-fill both/);
+  unless ($msgFrames[$id]) {
+    my $top = $over->toplevel;
+
+    my $msgFrame = $top->Frame(qw/-bd 1 -relief solid/);
+    my $msgLabel = $msgFrame->Label(qw/-padx 20 -pady 20/,
+				    %hash,
+				   )->pack(qw/-fill both/);
+
+    $msgFrames[$id] = $msgFrame;
+    $msgLabels[$id] = $msgLabel;
   }
 
-  $msgLabel->configure(-text => $msg);
-  $msgFrame->update;
-  $msgFrame->raise;
+  $msgLabels[$id]->configure(%hash, -text => $msg);
+  $msgFrames[$id]->idletasks;
+  $msgFrames[$id]->raise;
 
-  $msgMoving = 1;
-
-  animateMsgDown($over);
+  _animateMsgDown($over, $id, $msgDelay);
 }
 
-sub animateMsgDown {
-  my $top = shift;
+sub _animateMsgDown {
+  my ($top, $id, $msgDelay) = @_;
 
-  unless (defined $msgX) {
-    $msgY = -$msgFrame->reqheight;
-    $msgX = int 0.5 * ($top->width - $msgFrame->reqwidth);
+  unless (defined $msgX[$id]) {
+    $msgY [$id] = $msgFrames[$id]->reqheight * ($id-1);
+    $msgX [$id] = int 0.5 * ($top->width - $msgFrames[$id]->reqwidth);
+    $stopY[$id] = $msgY[$id] + $msgFrames[$id]->reqheight;
   } else {
-    $msgY++;
+    $msgY[$id]++;
   }
 
-  $msgFrame->place(-x => $msgX,
-		   -y => $msgY);
+  $msgFrames[$id]->place(-x => $msgX[$id],
+			 -y => $msgY[$id]);
 
-  if ($msgY == 0) {
-    $top->after($msgDelay => [\&animateMsgUp, $top]);
+  if ($msgY[$id] == $stopY[$id]) {
+    $top->after($msgDelay => [\&_animateMsgUp, $top, $id]);
     return;
   }
 
-  $top->after(5 => [\&animateMsgDown, $top]);
+  $top->after(5 => [\&_animateMsgDown, $top, $id, $msgDelay]);
 }
 
-sub animateMsgUp {
-  my $top = shift;
+sub _animateMsgUp {
+  my ($top, $id) = @_;
 
-  $msgY--;
+  $msgY[$id]--;
 
-  $msgFrame->place(-x => $msgX,
-		   -y => $msgY);
+  $msgFrames[$id]->place(-x => $msgX[$id],
+			 -y => $msgY[$id]);
 
-  if ($msgY == -$msgFrame->height) {
-    $msgX = $msgY = undef;
-    $msgFrame->placeForget;
-    $msgMoving = 0;
+  if ($msgY[$id] == -$msgFrames[$id]->height) {
+    $msgX[$id] = $msgY[$id] = undef;
+    $msgFrames[$id]->placeForget;
 
     return;
   }
 
-  $top->after(5 => [\&animateMsgUp, $top]);
+  $top->after(5 => [\&_animateMsgUp, $top, $id]);
 }
+
+#my $msgFrame;
+#my $msgLabel;
+#my ($msgX, $msgY, $msgDelay);
+#my $msgMoving = 0;
+
+#sub popMessage {
+#  return if $msgMoving;
+
+#  my ($over, $msg) = @_;
+
+#  $msgDelay = $_[2] || 3000;  # 3 secs
+
+#  unless ($msgFrame) {
+#    $msgFrame = $::MW->Frame(qw/-bd 1 -relief solid/);
+#    $msgLabel = $msgFrame->Label(qw/-padx 20 -pady 20/,
+#				 -bg   => 'white',
+#				 -font => 'Level',
+#				)->pack(qw/-fill both/);
+#  }
+
+#  $msgLabel->configure(-text => $msg);
+#  $msgFrame->update;
+#  $msgFrame->raise;
+
+#  $msgMoving = 1;
+
+#  animateMsgDown($over);
+#}
+
+#sub animateMsgDown {
+#  my $top = shift;
+
+#  unless (defined $msgX) {
+#    $msgY = -$msgFrame->reqheight;
+#    $msgX = int 0.5 * ($top->width - $msgFrame->reqwidth);
+#  } else {
+#    $msgY++;
+#  }
+
+#  $msgFrame->place(-x => $msgX,
+#		   -y => $msgY);
+
+#  if ($msgY == 0) {
+#    $top->after($msgDelay => [\&animateMsgUp, $top]);
+#    return;
+#  }
+
+#  $top->after(5 => [\&animateMsgDown, $top]);
+#}
+
+#sub animateMsgUp {
+#  my $top = shift;
+
+#  $msgY--;
+
+#  $msgFrame->place(-x => $msgX,
+#		   -y => $msgY);
+
+#  if ($msgY == -$msgFrame->height) {
+#    $msgX = $msgY = undef;
+#    $msgFrame->placeForget;
+#    $msgMoving = 0;
+
+#    return;
+#  }
+
+#  $top->after(5 => [\&animateMsgUp, $top]);
+#}
 
 ##########################
 #
@@ -216,6 +291,11 @@ sub animateOpen {
   #$c->coords($id, @oldC);
   #$c->itemconfigure($id, -width => 0, -height => 0);
   $c->itemconfigure($id, -state => 'hidden');
+}
+
+sub lineUpCommas {
+  my $len = (sort {$b <=> $a} map length $_->[0] => @_)[0];
+  return join "\n" => map {sprintf "   %-$ {len}s => %s," => @$_} @_;
 }
 
 'the truth';
