@@ -43,6 +43,26 @@ OPTIONAL COMPONENTS
     be used.
 
 TIPS
+    *   You can create a project, then save the code as a Perl Module with a
+        .pm extension. This will create a composite mega widget, with the
+        same name as your project, but with any non-alphanumeric characters
+        switched to underscores. For example, "Project 1.5" will be changed
+        to "Project_1_5". You can then use this in a larger program as a
+        regular widget.
+
+        For example, if you dumped your module into myMod.pm, and your
+        project was called "Project 1.5", then you would do this in your
+        main code:
+
+            use myMod;
+            my $project = $parent->Project_1_5->pack;
+
+        Note also that the mega widget will Advertise() every widget in your
+        project. So, if your project had a canvas called Canvas1, you can
+        access it like this:
+
+            my $cv = $project->Subwidget('Canvas1');
+
     *   ZooZ automatically defines a hash called *%ZWIDGETS* that holds the
         project's widgets. This allows the user to access any widget inside
         of a callback via *$ZWIDGETS{WidgetName}* where WidgetName is the
@@ -62,10 +82,11 @@ BUGS
 
 ACKNOWLEDGEMENTS
     I'm indebted to everyone on comp.lang.perl.tk for constructive comments
-    and bug reports.
+    and bug reports. Many people also emailed me with bugs and suggestions.
+    It is much appreciated.
 
 COPYRIGHTS
-    Copyright 2004 - Ala Qumsieh.
+    Copyright 2004-2005 - Ala Qumsieh.
 
     This program is distributed under the same terms as Perl itself.
 

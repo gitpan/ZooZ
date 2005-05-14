@@ -1443,6 +1443,8 @@ sub save {
     my $ref;
 
     if ($lab eq 'MainWindow') {
+      next if $self->{ISCHILD};
+
       $ref            = $self->{MWPROPS};
       print $fh "[MainWindow]\n";
       print $fh "Title ", $self->{PREVIEW}->title, "\n";

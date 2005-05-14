@@ -123,6 +123,9 @@ our (
      # Warnings
      $WARN_DIALOG,
      $WARNINGS_ON,
+
+     # Perl lib path
+     $PERLLIB,
     );
 
 
@@ -144,7 +147,7 @@ push @{$availableWidgets{datadisp}} => 'NoteBook' if NOTEBOOK_SUPPORT;
 #
 # Inits
 #
-$VERSION      = '1.1';
+$VERSION      = '1.2';
 $PROJID       = 0;
 $NO_SPLASH    = DEBUG? 1 : 0;
 $WARNINGS_ON  = 1;
@@ -161,10 +164,14 @@ $WARNINGS_ON  = 1;
 		  ['All Files',  '*'    ],
 		 ],
 		);
-$COPYRIGHT     = 'Copyright 2004 - Ala Qumsieh. All rights reserved.';
+$COPYRIGHT     = 'Copyright 2004-2005 - Ala Qumsieh. All rights reserved.';
 
 # Control Data::Dumper
 $Data::Dumper::Indent = 0;
+
+# First, check if ZooZ is installed.
+die "Cannot find ZooZ libraries. Make sure ZooZ is properly installed on your system.\n"
+  unless $PERLLIB = findDir('ZooZ/Project.pm');
 
 #
 # Read any command line args
@@ -230,8 +237,8 @@ sub createMW {
 			   -relief => 'ridge',
 			  )->pack(qw/-fill both -expand 1/);
 
-    my $logo  = $SPLASH->Photo(-file => 'ZooZ/icons/zooz_logo.gif');
-    my $logo2 = $SPLASH->Photo(-file => 'ZooZ/icons/screenshot4logo.gif');
+    #my $logo  = $SPLASH->Photo(-file => "$PERLLIB/ZooZ/icons/zooz_logo.gif");
+    my $logo2 = $SPLASH->Photo(-file => "$PERLLIB/ZooZ/icons/screenshot4logo.gif");
 
     #$f->Label(-image => $logo)->pack(qw/-side top/);
     $f->Label(-image => $logo2)->pack(qw/-side top/);
@@ -243,6 +250,7 @@ sub createMW {
 		   )->pack(qw/-side top -fill x -pady 10 -padx 10/);
 
     $f->Label(-textvariable => \$SPLASH_MSG,
+	      -font => 'Times 10 normal',
 	     )->pack(qw/-fill x -side top/);
 
     $f->Label(-text => $COPYRIGHT,
@@ -1058,7 +1066,7 @@ sub loadProject {
 }
 
 sub loadIcons {
-  for my $file (<ZooZ/icons/*png>, <ZooZ/icons/*gif>) {  # should this use Tk->findINC ??
+  for my $file (<$PERLLIB/ZooZ/icons/*png>, <$PERLLIB/ZooZ/icons/*gif>) {  # should this use Tk->findINC ??
     my ($name, $format) = $file =~ m{.*/(.+)\.(gif|png)};
     next if exists $ICONS{$name};
 
@@ -1384,7 +1392,16 @@ sub dumpPerlAs {
 			      -bg    => 'white',
 			      -font  => 'Level');
 
-  my $f = $MW->getSaveFile(-title => 'Choose File to Save');
+  my $f = $MW->getSaveFile(-title => 'Choose File to Save',
+			   -defaultextension => '.pl',
+			   -initialdir       => '.',
+			   -filetypes        =>
+			   [
+			    ['PL Files',   '.pl'],
+			    ['ZooZ Files', '.zooz'],
+			    ['All Files',  '*'    ],
+			   ],
+			  );
   $f or return;
 
   $PERL_FILES[$CURID] = $f;
@@ -1603,7 +1620,16 @@ sub dumpPerlPMAs {  # Code dup :(
 			      -bg    => 'white',
 			      -font  => 'Level');
 
-  my $f = $MW->getSaveFile(-title => 'Choose File to Save');
+  my $f = $MW->getSaveFile(-title => 'Choose File to Save',
+			   -defaultextension => '.pm',
+			   -initialdir       => '.',
+			   -filetypes        =>
+			   [
+			    ['PM Files',   '.pm'],
+			    ['ZooZ Files', '.zooz'],
+			    ['All Files',  '*'    ],
+			   ],
+			  );
   $f or return;
 
   $PM_FILES[$CURID] = $f;
@@ -1692,11 +1718,15 @@ sub Populate {
 
   $w->SUPER::Populate($args);
 
+  # need to create a dummy Frame to prevent
+  # Tk overriding subwidget configurations.
+  my $f = $w->Frame->pack(qw/-fill both -expand 1/);
+
 EOT
   ;
 
   # Now let the project do it's thing.
-  $PROJECTS[$CURID]->dumpPerl($fh, 1, '$w');
+  $PROJECTS[$CURID]->dumpPerl($fh, 1, '$f');
 
   print $fh "\n\n";
 
@@ -1828,6 +1858,16 @@ sub stringifyVars {
   return \@vars;
 }
 
+sub findDir {
+  my $f = shift;
+
+  for my $p (@INC) {
+    return $p if -f "$p/$f";
+  }
+
+  return 0;
+}
+
 __END__
 
 =pod
@@ -1902,6 +1942,25 @@ Tk::Text will be used.
 
 =item *
 
+You can create a project, then save the code as a Perl Module with a F<.pm> extension.
+This will create a composite mega widget, with the same name as your project, but with
+any non-alphanumeric characters switched to underscores. For example, C<Project 1.5> will
+be changed to C<Project_1_5>. You can then B<use> this in a larger program as a regular
+widget.
+
+For example, if you dumped your module into F<myMod.pm>, and your project was called
+C<Project 1.5>, then you would do this in your main code:
+
+    use myMod;
+    my $project = $parent->Project_1_5->pack;
+
+Note also that the mega widget will F<Advertise()> every widget in your project.
+So, if your project had a canvas called Canvas1, you can access it like this:
+
+    my $cv = $project->Subwidget('Canvas1');
+
+=item *
+
 ZooZ automatically defines a hash called I<%ZWIDGETS> that holds the project's
 widgets. This allows the user to access any widget inside of a callback via
 I<$ZWIDGETS{WidgetName}> where B<WidgetName> is the name of the widget.
@@ -1926,11 +1985,12 @@ ZooZ-related, then please drop me a note at I<aqumsieh@cpan.org>.
 =head1 ACKNOWLEDGEMENTS
 
 I'm indebted to everyone on comp.lang.perl.tk for constructive comments and
-bug reports.
+bug reports. Many people also emailed me with bugs and suggestions. It is
+much appreciated.
 
 =head1 COPYRIGHTS
 
-Copyright 2004 - Ala Qumsieh.
+Copyright 2004-2005 - Ala Qumsieh.
 
 This program is distributed under the same terms as Perl itself.
 
